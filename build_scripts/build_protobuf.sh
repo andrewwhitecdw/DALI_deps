@@ -49,7 +49,14 @@ cmake -DCMAKE_BUILD_TYPE=Release \
 make -j"${JOBS}"
 make install
 # only when cross compiling
-if [ "${CC_COMP}" != "gcc" ]; then
+CC_COMP_BASENAME=$(basename "${CC_COMP}")
+# A cross toolchain can also be exposed under a plain "gcc" name (e.g.
+# /opt/cross/bin/gcc), so additionally compare the compiler's target
+# architecture against the build host. When the compiler cannot be
+# queried, fall back to the basename check alone.
+CC_COMP_TARGET_ARCH=$("${CC_COMP}" -dumpmachine 2>/dev/null | cut -d- -f1)
+if [ "${CC_COMP_BASENAME}" != "gcc" ] || \
+   { [ -n "${CC_COMP_TARGET_ARCH}" ] && [ "${CC_COMP_TARGET_ARCH}" != "$(uname -m)" ]; }; then
   rm -rf *
   echo "set(CMAKE_SYSTEM_NAME Linux)" > toolchain.cmake
   echo "set(CMAKE_SYSTEM_PROCESSOR ${CMAKE_TARGET_ARCH})" >> toolchain.cmake
