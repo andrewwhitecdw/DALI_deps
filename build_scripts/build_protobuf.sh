@@ -20,6 +20,8 @@ mkdir -p build
 cd build
 
 # Validate before use
+JOBS=$(nproc)
+
 if [[ ! "$CC_COMP" =~ ^[a-zA-Z0-9/_.+-]+$ ]]; then
   echo "ERROR: CC_COMP contains invalid characters" >&2
   exit 1
@@ -44,10 +46,17 @@ cmake -DCMAKE_BUILD_TYPE=Release \
       -Dprotobuf_BUILD_TESTS=OFF \
       -Dprotobuf_FORCE_FETCH_DEPENDENCIES=ON \
       ..
-make -j"$(grep ^processor /proc/cpuinfo | wc -l)"
+make -j"${JOBS}"
 make install
 # only when cross compiling
-if [ "${CC_COMP}" != "gcc" ]; then
+CC_COMP_BASENAME=$(basename "${CC_COMP}")
+# A cross toolchain can also be exposed under a plain "gcc" name (e.g.
+# /opt/cross/bin/gcc), so additionally compare the compiler's target
+# architecture against the build host. When the compiler cannot be
+# queried, fall back to the basename check alone.
+CC_COMP_TARGET_ARCH=$("${CC_COMP}" -dumpmachine 2>/dev/null | cut -d- -f1)
+if [ "${CC_COMP_BASENAME}" != "gcc" ] || \
+   { [ -n "${CC_COMP_TARGET_ARCH}" ] && [ "${CC_COMP_TARGET_ARCH}" != "$(uname -m)" ]; }; then
   rm -rf *
   echo "set(CMAKE_SYSTEM_NAME Linux)" > toolchain.cmake
   echo "set(CMAKE_SYSTEM_PROCESSOR ${CMAKE_TARGET_ARCH})" >> toolchain.cmake
@@ -68,7 +77,7 @@ if [ "${CC_COMP}" != "gcc" ]; then
         -Dprotobuf_FORCE_FETCH_DEPENDENCIES=ON \
         -DWITH_PROTOC=${HOST_INSTALL_PREFIX}/bin/protoc \
         ..
-  make -j"$(grep ^processor /proc/cpuinfo | wc -l)"
+  make -j"${JOBS}"
   make install
 fi
 popd
